@@ -1,0 +1,7 @@
+**/node_modules
+**/.env
+
+mern_chat_fe/dist
+mern_chat_fe/.vite
+mern_chat_be/build
+mern_chat_be/dist
