@@ -3,6 +3,9 @@ import dotenv from "dotenv";
 import cors from "cors";
 import http from "http";
 import {Server} from "socket.io";
+import { connectDB } from "./db.js";
+import jwt from "jsonwebtoken";
+import Message from "./src/models/Message.js";
 
 dotenv.config();
 
@@ -27,7 +30,7 @@ const verifySocketToken = (token) =>{
 }
 
 io.use((socket,next) => {
-    const token = socket.handshake.auth.token
+    const token = socket.handshake.auth?.token
     const payload = verifySocketToken(token);
     if(payload){
         socket.userId = payload.id;
@@ -71,7 +74,7 @@ io.on("connection", (socket) =>{
             status: message.status,
             createdAt: message.createdAt
         })
-    })
+    
      // optional: notify specific socket if receiver is online
      const receiverSocketId = onlineUsers.get(to);
      if(receiverSocketId){
@@ -80,10 +83,30 @@ io.on("connection", (socket) =>{
             content: content.slice(0,60)
         });
     }
+   }) 
+
+    socket.on("message_delivered", async({messageId})=>{
+        await Message.findByIdAndUpdate(messageId, {status: 'delivered'});
+        io.emit("message_status_update", {messageId, status: 'delivered'});
+    })
+
+    socket.on("message_read", async({messageId})=>{
+        await Message.findByIdAndUpdate(messageId, {status: "read"});
+        io.emit("message_status_update", {messageId, status: 'read'});
+    })
+
+    socket.on("typing", ({to, isTyping})=>{
+        const roomId = [socket.userId, to].sort().join("_");
+        socket.to(roomId).emit("typing",{from:socket.userId, isTyping});
+    })
+
+    socket.on("disconnect", ()=>{
+        onlineUsers.delete(socket.userId);
+        console.log("socket disconnected", socket.userId);
+    })
 })
-
 const PORT = process.env.PORT || 5000;
-
+connectDB();
 server.listen(PORT, () =>{
     console.log(`Server is running on port ${PORT}`);
 })
